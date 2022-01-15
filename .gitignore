@@ -1,0 +1,8 @@
+#shell script
+*.sh
+#VScode History
+.history
+#./dic(辞書) UserConfig.txt
+*.txt
+#音声ファイル
+*.wav
