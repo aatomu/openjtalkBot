@@ -307,7 +307,7 @@ func setUserSetting(m *atomicgo.MessageStruct, discord *discordgo.Session) {
 		return
 	}
 	if user.pitch < -50 || 50 < user.pitch {
-		atomicgo.PrintError("Pitch is not -5.0 ~ 5.0", nil)
+		atomicgo.PrintError("Pitch is not -50.0 ~ 50.0", nil)
 		atomicgo.AddReaction(discord, m.ChannelID, m.MessageID, "❌")
 		return
 	}
@@ -497,7 +497,7 @@ func sendHelp(discord *discordgo.Session, channelID string) {
 	Text := "--TTS--\n" +
 		*prefix + " join :VCに参加します\n" +
 		*prefix + " get :読み上げ設定を表示します(User単位)\n" +
-		*prefix + " set <Alpha> <Speed> <Pitch> <Accent>: 読み上げ設定を変更します(User単位)\n" +
+		*prefix + " set <Alpha 0-1> <Speed 0.1-10> <Pitch -50-50> <Accent 0-50>: 読み上げ設定を変更します(User単位)\n" +
 		*prefix + " word <元>,<先> : 辞書を登録します(Guild単位)\n" +
 		*prefix + " limit <1-100> : 読み上げ文字数の上限を設定します(Guild単位)\n" +
 		*prefix + " leave : VCから切断します\n"
