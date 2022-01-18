@@ -82,7 +82,7 @@ Voice
  Connect
  Speak
 ```
-招待リンク `https://discord.com/api/oauth2/authorize?client_id=<Your Bot Client ID>&permissions=3230784&scope=bot`  
+招待リンク `https://discord.com/api/oauth2/authorize?client_id=<Your Bot Application ID>&permissions=3230784&scope=bot`  
   
 ## -起動-  
 ```go run main.go -prefix=<prefix> -token=<bot token> -dic=<open-jtalk dictionary> -voice=<open-jtalk voice>```
