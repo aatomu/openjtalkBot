@@ -4,6 +4,8 @@ github.com/ChimeraCoder/tokenbucket v0.0.0-20131201223612-c5a927568de7 h1:r+EmXj
 github.com/ChimeraCoder/tokenbucket v0.0.0-20131201223612-c5a927568de7/go.mod h1:b2EuEMLSG9q3bZ95ql1+8oVqzzrTNSiOQqSXWFBzxeI=
 github.com/atomu21263/atomicgo v0.0.0-20220114171005-8aa05181af4c h1:0/aiO76WCwUvkMtkyKpzb655pdzhggw7V70iFxYCD70=
 github.com/atomu21263/atomicgo v0.0.0-20220114171005-8aa05181af4c/go.mod h1:Oib48i+nqEIuD3UyS7n+ZtbYDxkALnRmSe8SBidXGnA=
+github.com/atomu21263/atomicgo v0.0.0-20220116142747-6d9ad012b156 h1:xUeRqgDifaEt/xnOQZ3fugXD7dOJLmlvVjhy6KQtHfg=
+github.com/atomu21263/atomicgo v0.0.0-20220116142747-6d9ad012b156/go.mod h1:Oib48i+nqEIuD3UyS7n+ZtbYDxkALnRmSe8SBidXGnA=
 github.com/azr/backoff v0.0.0-20160115115103-53511d3c7330 h1:ekDALXAVvY/Ub1UtNta3inKQwZ/jMB/zpOtD8rAYh78=
 github.com/azr/backoff v0.0.0-20160115115103-53511d3c7330/go.mod h1:nH+k0SvAt3HeiYyOlJpLLv1HG1p7KWP7qU9QPp2/pCo=
 github.com/bwmarrin/discordgo v0.23.3-0.20210821175000-0fad116c6c2a h1:L7EuIzka83l5Z7LQqpSBfvmTNvUdr9tGhBa0mDBgSsc=

@@ -56,7 +56,6 @@ var (
 		pitch:  0,
 		accent: 3,
 	}
-	tts sync.Mutex
 )
 
 func main() {
@@ -66,14 +65,15 @@ func main() {
 	fmt.Println("token        :", *token)
 
 	//bot起動準備
-	discord := atomicgo.DiscordBotBoot(*token)
+	discord := atomicgo.DiscordBotSetup(*token)
 	//eventトリガー設定
 	discord.AddHandler(onReady)
 	discord.AddHandler(onMessageCreate)
 	discord.AddHandler(onVoiceStateUpdate)
 
 	//起動
-	defer atomicgo.DiscordBotCleanup(discord)
+	atomicgo.DiscordBotStart(discord)
+	defer atomicgo.DiscordBotEnd(discord)
 	//起動メッセージ表示
 	fmt.Println("Listening...")
 
@@ -199,13 +199,8 @@ func joinVoiceChat(channelID string, guildID string, discord *discordgo.Session,
 func speechOnVoiceChat(userID string, session *SessionData, text string) {
 	data, err := os.Open("./dic/" + session.guildID + ".txt")
 	if atomicgo.PrintError("Failed open dictionary", err) {
-		//フォルダがあるか確認
-		_, err := os.Stat("./dic")
 		//フォルダがなかったら作成
-		if os.IsNotExist(err) {
-			err = os.Mkdir("./dic", 0777)
-			atomicgo.PrintError("Failed create directory", err)
-		}
+		atomicgo.CheckAndCreateDir("./dic")
 		//ふぁいる作成
 		err = atomicgo.WriteFileFlash("./dic/"+session.guildID+".txt", []byte{}, 0777)
 		atomicgo.PrintError("Failed create dictionary", err)
@@ -255,10 +250,10 @@ func speechOnVoiceChat(userID string, session *SessionData, text string) {
 	//読み上げ待機
 	session.mut.Lock()
 	defer session.mut.Unlock()
-	tts.Lock()
-	cmd := atomicgo.ExecuteCommand("echo \"" + read + "\" | open_jtalk -x " + *openJtalkDic + " -m " + *openJtalkVoice + " -a " + fmt.Sprint(user.alpha) + " -r " + fmt.Sprint(user.speed) + " -fm " + fmt.Sprint(user.pitch) + " -jf " + fmt.Sprint(user.accent) + " -ow tts.wav")
+	//フォルダがなかったら作成
+	atomicgo.CheckAndCreateDir("./vc")
+	cmd := atomicgo.ExecuteCommand("echo \"" + read + "\" | open_jtalk -x " + *openJtalkDic + " -m " + *openJtalkVoice + " -a " + fmt.Sprint(user.alpha) + " -r " + fmt.Sprint(user.speed) + " -fm " + fmt.Sprint(user.pitch) + " -jf " + fmt.Sprint(user.accent) + " -ow ./vc/" + session.guildID + ".wav")
 	cmd.Run()
-	tts.Unlock()
 	err = atomicgo.PlayAudioFile(1, 1, session.vcsession, "./tts.wav")
 	atomicgo.PrintError("Failed play Audio ", err)
 }
@@ -339,8 +334,8 @@ func userGetAndWriteConfig(userID string, data UserVoiceSetting) (user UserVoice
 	//ファイルパスの指定
 	fileName := "./UserConfig.txt"
 
-	byteText := atomicgo.ReadAndCreateFileFlash(fileName)
-	if byteText == nil {
+	byteText, ok := atomicgo.ReadAndCreateFileFlash(fileName)
+	if !ok {
 		return defaultUserConfig, fmt.Errorf("failed read&write file")
 	}
 	text := string(byteText)
@@ -427,21 +422,21 @@ func addWord(message string, guildID string, discord *discordgo.Session, channel
 		return
 	}
 
-	//フォルダがあるか確認
-	_, err := os.Stat("./dic")
 	//ファイルがなかったら作成
-	if os.IsNotExist(err) {
-		err = os.Mkdir("./dic", 0777)
-		if atomicgo.PrintError("Failed create dictionary", err) {
-			atomicgo.AddReaction(discord, channelID, messageID, "❌")
-			return
-		}
+	if atomicgo.CheckAndCreateDir("./dic") {
+		atomicgo.AddReaction(discord, channelID, messageID, "❌")
+		return
 	}
 
 	//ファイルの指定
 	fileName := "./dic/" + guildID + ".txt"
 	//ファイルがあるか確認
-	text := string(atomicgo.ReadAndCreateFileFlash(fileName))
+	textByte, ok := atomicgo.ReadAndCreateFileFlash("./dic/" + guildID + ".txt")
+	if !ok {
+		atomicgo.AddReaction(discord, channelID, messageID, "❌")
+		return
+	}
+	text := string(textByte)
 
 	//textをにダブりがないかを確認&置換
 	replace := regexp.MustCompile(`,.*`)
@@ -452,7 +447,7 @@ func addWord(message string, guildID string, discord *discordgo.Session, channel
 	}
 	text = text + word + "\n"
 	//書き込み
-	err = atomicgo.WriteFileFlash(fileName, []byte(text), 0777)
+	err := atomicgo.WriteFileFlash(fileName, []byte(text), 0777)
 	if atomicgo.PrintError("Failed write dictionary", err) {
 		atomicgo.AddReaction(discord, channelID, messageID, "❌")
 		return
