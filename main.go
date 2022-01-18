@@ -254,7 +254,7 @@ func speechOnVoiceChat(userID string, session *SessionData, text string) {
 	atomicgo.CheckAndCreateDir("./vc")
 	cmd := atomicgo.ExecuteCommand("echo \"" + read + "\" | open_jtalk -x " + *openJtalkDic + " -m " + *openJtalkVoice + " -a " + fmt.Sprint(user.alpha) + " -r " + fmt.Sprint(user.speed) + " -fm " + fmt.Sprint(user.pitch) + " -jf " + fmt.Sprint(user.accent) + " -ow ./vc/" + session.guildID + ".wav")
 	cmd.Run()
-	err = atomicgo.PlayAudioFile(1, 1, session.vcsession, "./tts.wav")
+	err = atomicgo.PlayAudioFile(1, 1, session.vcsession, "./vc/"+session.guildID+".wav")
 	atomicgo.PrintError("Failed play Audio ", err)
 }
 
