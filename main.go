@@ -185,7 +185,7 @@ func onMessageCreate(discord *discordgo.Session, m *discordgo.MessageCreate) {
 
 	//読み上げ
 	session, err := GetByGuildID(mData.GuildID)
-	if !(m.Author.Bot && session.enableBot) {
+	if m.Author.Bot && !session.enableBot {
 		return
 	}
 	if err == nil && session.channelID == mData.ChannelID {
