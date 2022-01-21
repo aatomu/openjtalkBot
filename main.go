@@ -185,10 +185,7 @@ func onMessageCreate(discord *discordgo.Session, m *discordgo.MessageCreate) {
 
 	//読み上げ
 	session, err := GetByGuildID(mData.GuildID)
-	if m.Author.Bot && !session.enableBot {
-		return
-	}
-	if err == nil && session.channelID == mData.ChannelID {
+	if err == nil && session.channelID == mData.ChannelID && !(m.Author.Bot && !session.enableBot) {
 		speechOnVoiceChat(mData.UserID, session, mData.Message)
 		return
 	}
@@ -434,14 +431,13 @@ func addWord(message string, guildID string, discord *discordgo.Session, channel
 	word := strings.Replace(message, *prefix+" word ", "", 1)
 
 	if strings.Count(word, ",") != 1 {
-		err := fmt.Errorf(word)
-		atomicgo.PrintError("Check failed word", err)
+		atomicgo.PrintError("Check failed word", fmt.Errorf(word))
 		atomicgo.AddReaction(discord, channelID, messageID, "❌")
 		return
 	}
 
 	//ファイルがなかったら作成
-	if atomicgo.CheckAndCreateDir("./dic") {
+	if !atomicgo.CheckAndCreateDir("./dic") {
 		atomicgo.AddReaction(discord, channelID, messageID, "❌")
 		return
 	}
@@ -455,12 +451,10 @@ func addWord(message string, guildID string, discord *discordgo.Session, channel
 		return
 	}
 	text := string(textByte)
-
 	//textをにダブりがないかを確認&置換
-	replace := regexp.MustCompile(`,.*`)
-	check := replace.ReplaceAllString(word, "")
-	if strings.Contains(text, "\n"+check+",") {
-		replace := regexp.MustCompile(`\n` + check + `,.+?\n`)
+	data := strings.Split(word, ",")
+	if strings.Contains(text, "\n"+data[0]+",") {
+		replace := regexp.MustCompile(`\n` + data[0] + `,.+?\n`)
 		text = replace.ReplaceAllString(text, "\n")
 	}
 	text = text + word + "\n"
