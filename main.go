@@ -451,10 +451,12 @@ func addWord(message string, guildID string, discord *discordgo.Session, channel
 		return
 	}
 	text := string(textByte)
+
 	//textをにダブりがないかを確認&置換
-	data := strings.Split(word, ",")
-	if strings.Contains(text, "\n"+data[0]+",") {
-		replace := regexp.MustCompile(`\n` + data[0] + `,.+?\n`)
+	replace := regexp.MustCompile(`,.*`)
+	check := replace.ReplaceAllString(word, "")
+	if strings.Contains(text, "\n"+check+",") {
+		replace := regexp.MustCompile(`\n` + check + `,.+?\n`)
 		text = replace.ReplaceAllString(text, "\n")
 	}
 	text = text + word + "\n"
