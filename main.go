@@ -23,6 +23,7 @@ type SessionData struct {
 	vcsession   *discordgo.VoiceConnection
 	speechLimit int
 	mut         sync.Mutex
+	enableBot   bool
 }
 
 type UserVoiceSetting struct {
@@ -119,8 +120,8 @@ func botStateUpdate(discord *discordgo.Session) {
 func onMessageCreate(discord *discordgo.Session, m *discordgo.MessageCreate) {
 	mData := atomicgo.MessageViewAndEdit(discord, m)
 
-	//bot 読み上げ無し のチェック
-	if m.Author.Bot || strings.HasPrefix(m.Content, ";") {
+	// 読み上げ無し のチェック
+	if strings.HasPrefix(m.Content, ";") {
 		return
 	}
 
@@ -154,6 +155,14 @@ func onMessageCreate(discord *discordgo.Session, m *discordgo.MessageCreate) {
 	case atomicgo.StringCheck(mData.Message, "^"+*prefix+" word "):
 		addWord(mData.Message, mData.GuildID, discord, mData.ChannelID, mData.MessageID)
 		return
+	case atomicgo.StringCheck(mData.Message, "^"+*prefix+" bot"):
+		session, err := GetByGuildID(mData.GuildID)
+		if err != nil {
+			atomicgo.AddReaction(discord, mData.ChannelID, mData.MessageID, "❌")
+			return
+		}
+		session.enableBot = !session.enableBot
+		return
 	case atomicgo.StringCheck(mData.Message, "^"+*prefix+" leave"):
 		session, err := GetByGuildID(mData.GuildID)
 		if err != nil || session.channelID != mData.ChannelID {
@@ -170,7 +179,7 @@ func onMessageCreate(discord *discordgo.Session, m *discordgo.MessageCreate) {
 
 	//読み上げ
 	session, err := GetByGuildID(mData.GuildID)
-	if err == nil && session.channelID == mData.ChannelID {
+	if err == nil && session.channelID == mData.ChannelID && m.Author.Bot == session.enableBot {
 		speechOnVoiceChat(mData.UserID, session, mData.Message)
 		return
 	}
