@@ -91,8 +91,9 @@ Voice
 `<prefix> join` :VCに参加します  
 `<prefix> get` :読み上げ設定を表示します(User単位)  
 `<prefix> set <Alpha> <Speed> <Pitch> <Accent>` : 読み上げ設定を変更します(User単位)  
-`<prefix> word` <元>,<先> : 辞書を登録します(Guild単位)  
-`<prefix> limit` <1-100> : 読み上げ文字数の上限を設定します(Guild単位)  
+`<prefix> word <元>,<先>` : 辞書を登録します(Guild単位)  
+`<prefix> limit <1-100>` : 読み上げ文字数の上限を設定します(Guild単位)  
+`<prefix> bot` : botのメッセージを読み上げるかをトグルします(Guild単位)  
 `<prefix> leave` : VCから切断します  
 
 ## コード元:  

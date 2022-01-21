@@ -162,6 +162,12 @@ func onMessageCreate(discord *discordgo.Session, m *discordgo.MessageCreate) {
 			return
 		}
 		session.enableBot = !session.enableBot
+		atomicgo.AddReaction(discord, mData.ChannelID, mData.MessageID, "🤖")
+		if session.enableBot {
+			atomicgo.AddReaction(discord, mData.ChannelID, mData.MessageID, "🔈")
+		} else {
+			atomicgo.AddReaction(discord, mData.ChannelID, mData.MessageID, "🔇")
+		}
 		return
 	case atomicgo.StringCheck(mData.Message, "^"+*prefix+" leave"):
 		session, err := GetByGuildID(mData.GuildID)
@@ -179,7 +185,10 @@ func onMessageCreate(discord *discordgo.Session, m *discordgo.MessageCreate) {
 
 	//読み上げ
 	session, err := GetByGuildID(mData.GuildID)
-	if err == nil && session.channelID == mData.ChannelID && m.Author.Bot == session.enableBot {
+	if !(m.Author.Bot && session.enableBot) {
+		return
+	}
+	if err == nil && session.channelID == mData.ChannelID {
 		speechOnVoiceChat(mData.UserID, session, mData.Message)
 		return
 	}
@@ -504,6 +513,7 @@ func sendHelp(discord *discordgo.Session, channelID string) {
 		*prefix + " set <Alpha 0-1> <Speed 0.1-10> <Pitch -50-50> <Accent 0-50>: 読み上げ設定を変更します(User単位)\n" +
 		*prefix + " word <元>,<先> : 辞書を登録します(Guild単位)\n" +
 		*prefix + " limit <1-100> : 読み上げ文字数の上限を設定します(Guild単位)\n" +
+		*prefix + " bot : Botのメッセージを読み上げるかをトグルします(Guild単位)\n" +
 		*prefix + " leave : VCから切断します\n"
 	embed.Description = Text
 	//送信
