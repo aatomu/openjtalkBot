@@ -74,8 +74,17 @@ func main() {
 
 	//起動
 	atomicgo.DiscordBotStart(discord)
-	defer atomicgo.DiscordBotEnd(discord)
-	//起動メッセージ表示
+	defer func() {
+		for _, session := range sessions {
+			atomicgo.SendEmbed(discord, session.channelID, &discordgo.MessageEmbed{
+				Type:        "rich",
+				Title:       "__Infomation__",
+				Description: "Sorry. Bot will  Shutdown. Will be try later.",
+				Color:       0xff00ff,
+			})
+		}
+		atomicgo.DiscordBotEnd(discord)
+	}() //起動メッセージ表示
 	fmt.Println("Listening...")
 
 	//bot停止対策
