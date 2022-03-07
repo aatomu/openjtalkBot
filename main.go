@@ -215,10 +215,17 @@ func speechOnVoiceChat(userID string, session *SessionData, text string) {
 	data, err := os.Open("./dic/" + session.guildID + ".txt")
 	if atomicgo.PrintError("Failed open dictionary", err) {
 		//フォルダがなかったら作成
-		atomicgo.CheckAndCreateDir("./dic")
+		if !atomicgo.CheckFile("./dic") {
+			if !atomicgo.CreateDir("./dic", 0755) {
+				return
+			}
+		}
 		//ふぁいる作成
-		err = atomicgo.WriteFileFlash("./dic/"+session.guildID+".txt", []byte{}, 0777)
-		atomicgo.PrintError("Failed create dictionary", err)
+		if !atomicgo.CheckFile("./dic/" + session.guildID + ".txt") {
+			if !atomicgo.CreateFile("./dic/" + session.guildID + ".txt") {
+				return
+			}
+		}
 	}
 	defer data.Close()
 
@@ -266,8 +273,12 @@ func speechOnVoiceChat(userID string, session *SessionData, text string) {
 	session.mut.Lock()
 	defer session.mut.Unlock()
 	//フォルダがなかったら作成
-	atomicgo.CheckAndCreateDir("./vc")
-	cmd := atomicgo.ExecuteCommand("echo \"" + read + "\" | open_jtalk -x " + *openJtalkDic + " -m " + *openJtalkVoice + " -a " + fmt.Sprint(user.alpha) + " -r " + fmt.Sprint(user.speed) + " -fm " + fmt.Sprint(user.pitch) + " -jf " + fmt.Sprint(user.accent) + " -ow ./vc/" + session.guildID + ".wav")
+	if !atomicgo.CheckFile("./vc") {
+		if !atomicgo.CreateDir("./vc", 0755) {
+			return
+		}
+	}
+	cmd := atomicgo.ExecuteCommand("/bin/bash", "-c", "echo \""+read+"\" | open_jtalk -x "+*openJtalkDic+" -m "+*openJtalkVoice+" -a "+fmt.Sprint(user.alpha)+" -r "+fmt.Sprint(user.speed)+" -fm "+fmt.Sprint(user.pitch)+" -jf "+fmt.Sprint(user.accent)+" -ow ./vc/"+session.guildID+".wav")
 	cmd.Run()
 	err = atomicgo.PlayAudioFile(1, 1, session.vcsession, "./vc/"+session.guildID+".wav")
 	atomicgo.PrintError("Failed play Audio ", err)
@@ -349,7 +360,7 @@ func userGetAndWriteConfig(userID string, data UserVoiceSetting) (user UserVoice
 	//ファイルパスの指定
 	fileName := "./UserConfig.txt"
 
-	byteText, ok := atomicgo.ReadAndCreateFileFlash(fileName)
+	byteText, ok := atomicgo.ReadFile(fileName)
 	if !ok {
 		return defaultUserConfig, fmt.Errorf("failed read&write file")
 	}
@@ -428,41 +439,52 @@ func changeSpeechLimit(session *SessionData, message string, discord *discordgo.
 }
 
 func addWord(message string, guildID string, discord *discordgo.Session, channelID string, messageID string) {
-	word := strings.Replace(message, *prefix+" word ", "", 1)
+	text := strings.Replace(message, *prefix+" word ", "", 1)
 
-	if strings.Count(word, ",") != 1 {
-		atomicgo.PrintError("Check failed word", fmt.Errorf(word))
-		atomicgo.AddReaction(discord, channelID, messageID, "❌")
-		return
-	}
-
-	//ファイルがなかったら作成
-	if !atomicgo.CheckAndCreateDir("./dic") {
+	if !atomicgo.StringCheck(text, "^.+?,.+?$") {
+		err := fmt.Errorf(text)
+		atomicgo.PrintError("Check failed word", err)
 		atomicgo.AddReaction(discord, channelID, messageID, "❌")
 		return
 	}
 
 	//ファイルの指定
 	fileName := "./dic/" + guildID + ".txt"
-	//ファイルがあるか確認
-	textByte, ok := atomicgo.ReadAndCreateFileFlash("./dic/" + guildID + ".txt")
-	if !ok {
+	//dirがあるか確認
+	if !atomicgo.CheckFile("./dic/") {
+		if !atomicgo.CreateDir("./dic/", 0775) {
+			atomicgo.AddReaction(discord, channelID, messageID, "❌")
+			return
+		}
+	}
+	//fileがあるか確認
+	if !atomicgo.CheckFile(fileName) {
+		if !atomicgo.CreateFile(fileName) {
+			atomicgo.AddReaction(discord, channelID, messageID, "❌")
+			return
+		}
+	}
+	textByte, _ := atomicgo.ReadFile(fileName)
+	dic := string(textByte)
+
+	//textをfrom toに
+	from := ""
+	to := ""
+	_, err := fmt.Sscanf(message, "%s,%s", from, to)
+	if atomicgo.PrintError("Failed message to dic in addWord()", err) {
 		atomicgo.AddReaction(discord, channelID, messageID, "❌")
 		return
 	}
-	text := string(textByte)
 
-	//textをにダブりがないかを確認&置換
-	replace := regexp.MustCompile(`,.*`)
-	check := replace.ReplaceAllString(word, "")
-	if strings.Contains(text, "\n"+check+",") {
-		replace := regexp.MustCompile(`\n` + check + `,.+?\n`)
-		text = replace.ReplaceAllString(text, "\n")
+	//確認
+	if strings.Contains(dic, "\n"+from+",") {
+		text = atomicgo.StringReplace(text, "\n", "\n"+from+",.+?\n")
 	}
-	text = text + word + "\n"
+
+	dic = dic + text + "\n"
 	//書き込み
-	err := atomicgo.WriteFileFlash(fileName, []byte(text), 0777)
-	if atomicgo.PrintError("Failed write dictionary", err) {
+	ok := atomicgo.WriteFileFlash(fileName, []byte(dic), 0777)
+	if !ok {
 		atomicgo.AddReaction(discord, channelID, messageID, "❌")
 		return
 	}
