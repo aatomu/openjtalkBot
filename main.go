@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"flag"
 	"fmt"
+	"os/exec"
 	"time"
 
 	"log"
@@ -14,6 +15,8 @@ import (
 	"sync"
 
 	"github.com/atomu21263/atomicgo"
+	"github.com/atomu21263/atomicgo/discordbot"
+	"github.com/atomu21263/atomicgo/files"
 	"github.com/bwmarrin/discordgo"
 )
 
@@ -33,7 +36,7 @@ type UserVoiceSetting struct {
 	accent float64 // F0系列内変動の重み -jf  0.0 - inf
 }
 
-//GuildIDからSessinを探す
+// GuildIDからSessinを探す
 func GetByGuildID(guildID string) (*SessionData, error) {
 	for _, s := range sessions {
 		if s.guildID == guildID {
@@ -66,32 +69,37 @@ func main() {
 	fmt.Println("token        :", *token)
 
 	//bot起動準備
-	discord := atomicgo.DiscordBotSetup(*token)
+	discord, err := discordbot.Init(*token)
+	if err != nil {
+		fmt.Println("Error", err)
+		return
+	}
+
 	//eventトリガー設定
 	discord.AddHandler(onReady)
 	discord.AddHandler(onMessageCreate)
 	discord.AddHandler(onVoiceStateUpdate)
 
 	//起動
-	atomicgo.DiscordBotStart(discord)
+	discordbot.Start(discord)
 	defer func() {
 		for _, session := range sessions {
-			atomicgo.SendEmbed(discord, session.channelID, &discordgo.MessageEmbed{
+			discord.ChannelMessageSendEmbed(session.channelID, &discordgo.MessageEmbed{
 				Type:        "rich",
 				Title:       "__Infomation__",
 				Description: "Sorry. Bot will  Shutdown. Will be try later.",
 				Color:       0xff00ff,
 			})
 		}
-		atomicgo.DiscordBotEnd(discord)
+		discord.Close()
 	}() //起動メッセージ表示
 	fmt.Println("Listening...")
 
 	//bot停止対策
-	atomicgo.StopWait()
+	<-atomicgo.BreakSignal()
 }
 
-//BOTの準備が終わったときにCall
+// BOTの準備が終わったときにCall
 func onReady(discord *discordgo.Session, r *discordgo.Ready) {
 	clientID = discord.State.User.ID
 	//1秒に1回呼び出す
@@ -125,10 +133,11 @@ func botStateUpdate(discord *discordgo.Session) {
 	discord.UpdateStatusComplex(state)
 }
 
-//メッセージが送られたときにCall
+// メッセージが送られたときにCall
 func onMessageCreate(discord *discordgo.Session, m *discordgo.MessageCreate) {
-	mData := atomicgo.MessageViewAndEdit(discord, m)
+	mData := discordbot.MessageParse(discord, m)
 
+	log.Println(mData.FormatText)
 	// 読み上げ無し のチェック
 	if strings.HasPrefix(m.Content, ";") {
 		return
@@ -136,58 +145,58 @@ func onMessageCreate(discord *discordgo.Session, m *discordgo.MessageCreate) {
 
 	switch {
 	//TTS関連
-	case atomicgo.StringCheck(mData.Message, "^"+*prefix+" join"):
+	case atomicgo.RegMatch(mData.Message, "^"+*prefix+" join"):
 		_, err := GetByGuildID(mData.GuildID)
 		if err == nil {
-			atomicgo.AddReaction(discord, mData.ChannelID, mData.MessageID, "❌")
+			discord.MessageReactionAdd(mData.ChannelID, mData.MessageID, "❌")
 			return
 		}
 		joinVoiceChat(mData.ChannelID, mData.GuildID, discord, mData.UserID, mData.MessageID)
 		return
-	case atomicgo.StringCheck(mData.Message, "^"+*prefix+" get"):
+	case atomicgo.RegMatch(mData.Message, "^"+*prefix+" get"):
 		viewUserSetting(&mData, discord)
 		return
-	case atomicgo.StringCheck(mData.Message, "^"+*prefix+" set "):
+	case atomicgo.RegMatch(mData.Message, "^"+*prefix+" set "):
 		if strings.Count(mData.Message, " ") != 5 {
-			atomicgo.AddReaction(discord, mData.ChannelID, mData.MessageID, "❌")
+			discord.MessageReactionAdd(mData.ChannelID, mData.MessageID, "❌")
 		}
 		setUserSetting(&mData, discord)
 		return
-	case atomicgo.StringCheck(mData.Message, "^"+*prefix+" limit "):
+	case atomicgo.RegMatch(mData.Message, "^"+*prefix+" limit "):
 		session, err := GetByGuildID(mData.GuildID)
 		if err != nil || session.channelID != mData.ChannelID {
-			atomicgo.AddReaction(discord, mData.ChannelID, mData.MessageID, "❌")
+			discord.MessageReactionAdd(mData.ChannelID, mData.MessageID, "❌")
 			return
 		}
 		changeSpeechLimit(session, mData.Message, discord, mData.ChannelID, mData.MessageID)
 		return
-	case atomicgo.StringCheck(mData.Message, "^"+*prefix+" word "):
+	case atomicgo.RegMatch(mData.Message, "^"+*prefix+" word "):
 		addWord(mData.Message, mData.GuildID, discord, mData.ChannelID, mData.MessageID)
 		return
-	case atomicgo.StringCheck(mData.Message, "^"+*prefix+" bot"):
+	case atomicgo.RegMatch(mData.Message, "^"+*prefix+" bot"):
 		session, err := GetByGuildID(mData.GuildID)
 		if err != nil {
-			atomicgo.AddReaction(discord, mData.ChannelID, mData.MessageID, "❌")
+			discord.MessageReactionAdd(mData.ChannelID, mData.MessageID, "❌")
 			return
 		}
 		session.enableBot = !session.enableBot
-		atomicgo.AddReaction(discord, mData.ChannelID, mData.MessageID, "🤖")
+		discord.MessageReactionAdd(mData.ChannelID, mData.MessageID, "🤖")
 		if session.enableBot {
-			atomicgo.AddReaction(discord, mData.ChannelID, mData.MessageID, "🔈")
+			discord.MessageReactionAdd(mData.ChannelID, mData.MessageID, "🔈")
 		} else {
-			atomicgo.AddReaction(discord, mData.ChannelID, mData.MessageID, "🔇")
+			discord.MessageReactionAdd(mData.ChannelID, mData.MessageID, "🔇")
 		}
 		return
-	case atomicgo.StringCheck(mData.Message, "^"+*prefix+" leave"):
+	case atomicgo.RegMatch(mData.Message, "^"+*prefix+" leave"):
 		session, err := GetByGuildID(mData.GuildID)
 		if err != nil || session.channelID != mData.ChannelID {
-			atomicgo.AddReaction(discord, mData.ChannelID, mData.MessageID, "❌")
+			discord.MessageReactionAdd(mData.ChannelID, mData.MessageID, "❌")
 			return
 		}
 		leaveVoiceChat(session, discord, mData.ChannelID, mData.MessageID, true)
 		return
 		//help
-	case atomicgo.StringCheck(mData.Message, "^"+*prefix+" help"):
+	case atomicgo.RegMatch(mData.Message, "^"+*prefix+" help"):
 		sendHelp(discord, mData.ChannelID)
 		return
 	}
@@ -202,9 +211,9 @@ func onMessageCreate(discord *discordgo.Session, m *discordgo.MessageCreate) {
 }
 
 func joinVoiceChat(channelID string, guildID string, discord *discordgo.Session, userID string, messageID string) {
-	voiceConection, err := atomicgo.JoinUserVCchannel(discord, userID)
+	voiceConection, err := discordbot.JoinUserVCchannel(discord, userID, false, true)
 	if atomicgo.PrintError("Failed join vc", err) {
-		atomicgo.AddReaction(discord, channelID, messageID, "❌")
+		discord.MessageReactionAdd(channelID, messageID, "❌")
 		return
 	}
 
@@ -216,7 +225,7 @@ func joinVoiceChat(channelID string, guildID string, discord *discordgo.Session,
 		mut:         sync.Mutex{},
 	}
 	sessions = append(sessions, session)
-	atomicgo.AddReaction(discord, channelID, messageID, "✅")
+	discord.MessageReactionAdd(channelID, messageID, "✅")
 	speechOnVoiceChat("BOT", session, "おはー")
 }
 
@@ -224,14 +233,14 @@ func speechOnVoiceChat(userID string, session *SessionData, text string) {
 	data, err := os.Open("./dic/" + session.guildID + ".txt")
 	if atomicgo.PrintError("Failed open dictionary", err) {
 		//フォルダがなかったら作成
-		if !atomicgo.CheckFile("./dic") {
-			if !atomicgo.CreateDir("./dic", 0755) {
+		if !files.IsAccess("./dic") {
+			if files.Create("./dic", true) != nil {
 				return
 			}
 		}
 		//ふぁいる作成
-		if !atomicgo.CheckFile("./dic/" + session.guildID + ".txt") {
-			if !atomicgo.CreateFile("./dic/" + session.guildID + ".txt") {
+		if !files.IsAccess("./dic/" + session.guildID + ".txt") {
+			if files.Create("./dic/"+session.guildID+".txt", false) != nil {
 				return
 			}
 		}
@@ -282,21 +291,21 @@ func speechOnVoiceChat(userID string, session *SessionData, text string) {
 	session.mut.Lock()
 	defer session.mut.Unlock()
 	//フォルダがなかったら作成
-	if !atomicgo.CheckFile("./vc") {
-		if !atomicgo.CreateDir("./vc", 0755) {
+	if !files.IsAccess("./vc") {
+		if files.Create("./vc", true) != nil {
 			return
 		}
 	}
-	cmd := atomicgo.ExecuteCommand("/bin/bash", "-c", "echo \""+read+"\" | open_jtalk -x "+*openJtalkDic+" -m "+*openJtalkVoice+" -a "+fmt.Sprint(user.alpha)+" -r "+fmt.Sprint(user.speed)+" -fm "+fmt.Sprint(user.pitch)+" -jf "+fmt.Sprint(user.accent)+" -ow ./vc/"+session.guildID+".wav")
+	cmd := exec.Command("/bin/bash", "-c", "echo \""+read+"\" | open_jtalk -x "+*openJtalkDic+" -m "+*openJtalkVoice+" -a "+fmt.Sprint(user.alpha)+" -r "+fmt.Sprint(user.speed)+" -fm "+fmt.Sprint(user.pitch)+" -jf "+fmt.Sprint(user.accent)+" -ow ./vc/"+session.guildID+".wav")
 	cmd.Run()
-	err = atomicgo.PlayAudioFile(1, 1, session.vcsession, "./vc/"+session.guildID+".wav")
+	err = discordbot.PlayAudioFile(1, 1, session.vcsession, "./vc/"+session.guildID+".wav", true, make(<-chan bool))
 	atomicgo.PrintError("Failed play Audio ", err)
 }
 
-func viewUserSetting(m *atomicgo.MessageStruct, discord *discordgo.Session) {
+func viewUserSetting(m *discordbot.MessageData, discord *discordgo.Session) {
 	user, err := userGetAndWriteConfig(m.UserID, defaultUserConfig)
 	if atomicgo.PrintError("Failed func userConfig()", err) {
-		atomicgo.AddReaction(discord, m.ChannelID, m.MessageID, "❌")
+		discord.MessageReactionAdd(m.ChannelID, m.MessageID, "❌")
 		return
 	}
 	//embedのData作成
@@ -315,11 +324,11 @@ func viewUserSetting(m *atomicgo.MessageStruct, discord *discordgo.Session) {
 		"Accent: " + fmt.Sprint(user.accent)
 	embed.Description = embedText
 	//送信
-	atomicgo.SendEmbed(discord, m.ChannelID, embed)
+	discord.ChannelMessageSendEmbed(m.ChannelID, embed)
 }
 
-//ユーザーの設定を変更
-func setUserSetting(m *atomicgo.MessageStruct, discord *discordgo.Session) {
+// ユーザーの設定を変更
+func setUserSetting(m *discordbot.MessageData, discord *discordgo.Session) {
 	//要らないところの切り捨て
 	text := strings.Replace(m.Message, *prefix+" set ", "", 1)
 	//データ編集
@@ -328,30 +337,30 @@ func setUserSetting(m *atomicgo.MessageStruct, discord *discordgo.Session) {
 	//数値確認
 	if user.alpha < 0 || 1 < user.alpha {
 		atomicgo.PrintError("Alpha is not 0.0 ~ 1.0", nil)
-		atomicgo.AddReaction(discord, m.ChannelID, m.MessageID, "❌")
+		discord.MessageReactionAdd(m.ChannelID, m.MessageID, "❌")
 		return
 	}
 	if user.speed < 0.1 || 10 < user.speed {
 		atomicgo.PrintError("Speed is not 0.0 ~ 10.0", nil)
-		atomicgo.AddReaction(discord, m.ChannelID, m.MessageID, "❌")
+		discord.MessageReactionAdd(m.ChannelID, m.MessageID, "❌")
 		return
 	}
 	if user.pitch < -50 || 50 < user.pitch {
 		atomicgo.PrintError("Pitch is not -50.0 ~ 50.0", nil)
-		atomicgo.AddReaction(discord, m.ChannelID, m.MessageID, "❌")
+		discord.MessageReactionAdd(m.ChannelID, m.MessageID, "❌")
 		return
 	}
 	if user.accent < 0 || 50 < user.accent {
 		atomicgo.PrintError("Accent is not 0.0 ~ 50.0", nil)
-		atomicgo.AddReaction(discord, m.ChannelID, m.MessageID, "❌")
+		discord.MessageReactionAdd(m.ChannelID, m.MessageID, "❌")
 		return
 	}
 	_, err := userGetAndWriteConfig(m.UserID, user)
 	if atomicgo.PrintError("Failed write speed", err) {
-		atomicgo.AddReaction(discord, m.ChannelID, m.MessageID, "❌")
+		discord.MessageReactionAdd(m.ChannelID, m.MessageID, "❌")
 		return
 	}
-	atomicgo.AddReaction(discord, m.ChannelID, m.MessageID, "🔊")
+	discord.MessageReactionAdd(m.ChannelID, m.MessageID, "🔊")
 }
 
 func userGetAndWriteConfig(userID string, data UserVoiceSetting) (user UserVoiceSetting, err error) {
@@ -369,9 +378,9 @@ func userGetAndWriteConfig(userID string, data UserVoiceSetting) (user UserVoice
 	//ファイルパスの指定
 	fileName := "./UserConfig.txt"
 
-	byteText, ok := atomicgo.ReadFile(fileName)
-	if !ok {
-		return defaultUserConfig, fmt.Errorf("failed read&write file")
+	byteText, err := os.ReadFile(fileName)
+	if err != nil {
+		return defaultUserConfig, err
 	}
 	text := string(byteText)
 
@@ -422,7 +431,7 @@ func userGetAndWriteConfig(userID string, data UserVoiceSetting) (user UserVoice
 		//最後に書き込むテキストを追加(Write==trueの時)
 		writeText = writeText + "UserID:" + userID + " Alpha:" + fmt.Sprint(user.alpha) + " Speed:" + fmt.Sprint(user.speed) + " Pitch:" + fmt.Sprint(user.pitch) + " Accent:" + fmt.Sprint(user.accent)
 		//書き込み
-		atomicgo.WriteFileFlash(fileName, []byte(writeText), 0777)
+		files.WriteFileFlash(fileName, []byte(writeText))
 		log.Println("User userConfig OverWrited")
 	}
 	return
@@ -433,47 +442,47 @@ func changeSpeechLimit(session *SessionData, message string, discord *discordgo.
 
 	limit, err := strconv.Atoi(limitText)
 	if atomicgo.PrintError("Faliled limit string to int", err) {
-		atomicgo.AddReaction(discord, channelID, messageID, "❌")
+		discord.MessageReactionAdd(channelID, messageID, "❌")
 		return
 	}
 
 	if limit <= 0 || 100 < limit {
 		atomicgo.PrintError("Limit is too most or too lowest.", err)
-		atomicgo.AddReaction(discord, channelID, messageID, "❌")
+		discord.MessageReactionAdd(channelID, messageID, "❌")
 		return
 	}
 
 	session.speechLimit = limit
-	atomicgo.AddReaction(discord, channelID, messageID, "🥺")
+	discord.MessageReactionAdd(channelID, messageID, "🥺")
 }
 
 func addWord(message string, guildID string, discord *discordgo.Session, channelID string, messageID string) {
 	text := strings.Replace(message, *prefix+" word ", "", 1)
 
-	if !atomicgo.StringCheck(text, "^.+?,.+?$") {
+	if !atomicgo.RegMatch(text, "^.+?,.+?$") {
 		err := fmt.Errorf(text)
 		atomicgo.PrintError("Check failed word", err)
-		atomicgo.AddReaction(discord, channelID, messageID, "❌")
+		discord.MessageReactionAdd(channelID, messageID, "❌")
 		return
 	}
 
 	//ファイルの指定
 	fileName := "./dic/" + guildID + ".txt"
 	//dirがあるか確認
-	if !atomicgo.CheckFile("./dic/") {
-		if !atomicgo.CreateDir("./dic/", 0775) {
-			atomicgo.AddReaction(discord, channelID, messageID, "❌")
+	if !files.IsAccess("./dic/") {
+		if files.Create("./dic/", true) != nil {
+			discord.MessageReactionAdd(channelID, messageID, "❌")
 			return
 		}
 	}
 	//fileがあるか確認
-	if !atomicgo.CheckFile(fileName) {
-		if !atomicgo.CreateFile(fileName) {
-			atomicgo.AddReaction(discord, channelID, messageID, "❌")
+	if !files.IsAccess(fileName) {
+		if files.Create(fileName, false) != nil {
+			discord.MessageReactionAdd(channelID, messageID, "❌")
 			return
 		}
 	}
-	textByte, _ := atomicgo.ReadFile(fileName)
+	textByte, _ := os.ReadFile(fileName)
 	dic := string(textByte)
 
 	//textをfrom toに
@@ -481,24 +490,24 @@ func addWord(message string, guildID string, discord *discordgo.Session, channel
 	to := ""
 	_, err := fmt.Sscanf(strings.ReplaceAll(text, ",", " "), "%s %s", &from, &to)
 	if atomicgo.PrintError("Failed message to dic in addWord()", err) {
-		atomicgo.AddReaction(discord, channelID, messageID, "❌")
+		discord.MessageReactionAdd(channelID, messageID, "❌")
 		return
 	}
 
 	//確認
 	if strings.Contains(dic, "\n"+from+",") {
-		text = atomicgo.StringReplace(text, "\n", "\n"+from+",.+?\n")
+		text = atomicgo.RegReplace(text, "\n", "\n"+from+",.+?\n")
 	}
 
 	dic = dic + text + "\n"
 	//書き込み
-	ok := atomicgo.WriteFileFlash(fileName, []byte(dic), 0777)
-	if !ok {
-		atomicgo.AddReaction(discord, channelID, messageID, "❌")
+	err = files.WriteFileFlash(fileName, []byte(dic))
+	if err != nil {
+		discord.MessageReactionAdd(channelID, messageID, "❌")
 		return
 	}
 
-	atomicgo.AddReaction(discord, channelID, messageID, "📄")
+	discord.MessageReactionAdd(channelID, messageID, "📄")
 }
 
 func leaveVoiceChat(session *SessionData, discord *discordgo.Session, channelID string, messageID string, reaction bool) {
@@ -507,7 +516,7 @@ func leaveVoiceChat(session *SessionData, discord *discordgo.Session, channelID 
 	if err := session.vcsession.Disconnect(); err != nil {
 		atomicgo.PrintError("Try disconect is Failed", err)
 		if reaction {
-			atomicgo.AddReaction(discord, channelID, messageID, "❌")
+			discord.MessageReactionAdd(channelID, messageID, "❌")
 		}
 		return
 	} else {
@@ -520,7 +529,7 @@ func leaveVoiceChat(session *SessionData, discord *discordgo.Session, channelID 
 		}
 		sessions = ret
 		if reaction {
-			atomicgo.AddReaction(discord, channelID, messageID, "⛔")
+			discord.MessageReactionAdd(channelID, messageID, "⛔")
 		}
 		return
 	}
@@ -550,7 +559,7 @@ func sendHelp(discord *discordgo.Session, channelID string) {
 	}
 }
 
-//VCでJoin||Leaveが起きたときにCall
+// VCでJoin||Leaveが起きたときにCall
 func onVoiceStateUpdate(discord *discordgo.Session, v *discordgo.VoiceStateUpdate) {
 
 	//セッションがあるか確認
