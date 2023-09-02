@@ -14,9 +14,9 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/atomu21263/atomicgo"
-	"github.com/atomu21263/atomicgo/discordbot"
-	"github.com/atomu21263/atomicgo/files"
+	"github.com/aatomu/atomicgo"
+	"github.com/aatomu/atomicgo/discordbot"
+	"github.com/aatomu/atomicgo/files"
 	"github.com/bwmarrin/discordgo"
 )
 
